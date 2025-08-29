@@ -1,0 +1,75 @@
+# version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: linkhoard_postgres
+    environment:
+      POSTGRES_DB: linkhoard
+      POSTGRES_USER: linkhoard_user
+      POSTGRES_PASSWORD: linkhoard_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - linkhoard_network
+
+  # Laravel Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: linkhoard_backend
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=linkhoard
+      - DB_USERNAME=linkhoard_user
+      - DB_PASSWORD=linkhoard_password
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_KEY=base64:1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ=
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    volumes:
+      - ./backend:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/node_modules
+    networks:
+      - linkhoard_network
+    command: >
+      sh -c "composer install &&
+             php artisan config:cache &&
+             php artisan migrate --force &&
+             php artisan serve --host=0.0.0.0 --port=8000"
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: linkhoard_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - linkhoard_network
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+
+volumes:
+  postgres_data:
+
+networks:
+  linkhoard_network:
+    driver: bridge
